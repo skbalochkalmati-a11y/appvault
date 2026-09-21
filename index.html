@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APKPure Clone - Zero Storage Mirror</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
+
+  <!-- Header -->
+  <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-2 cursor-pointer" onclick="loadApp('com.whatsapp')">
+        <i class="fa-solid fa-box-open text-emerald-400 text-2xl"></i>
+        <span class="font-bold text-xl tracking-wide text-white">APK<span class="text-emerald-400">Mirror</span></span>
+      </div>
+      
+      <!-- Search Bar -->
+      <form id="search-form" class="flex-1 max-w-md relative">
+        <input id="search-input" type="text" placeholder="Search apps, games (e.g. Instagram, Subway Surfers)..." 
+               class="w-full bg-slate-900 border border-slate-700 rounded-full py-2 pl-4 pr-10 text-sm focus:outline-none focus:border-emerald-500 text-white">
+        <button type="submit" class="absolute right-3 top-2.5 text-slate-400 hover:text-emerald-400">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
+      </form>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-6xl mx-auto px-4 py-8 flex-1 w-full">
+    
+    <!-- Loader -->
+    <div id="loader" class="hidden text-center py-20">
+      <i class="fa-solid fa-circle-notch fa-spin text-4xl text-emerald-400"></i>
+      <p class="mt-4 text-slate-400 text-sm">Fetching app data live from Play Store...</p>
+    </div>
+
+    <!-- Search Results Grid -->
+    <div id="search-results" class="hidden">
+      <h2 class="text-xl font-bold mb-4 border-b border-slate-700 pb-2">Search Results</h2>
+      <div id="results-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+    </div>
+
+    <!-- App Details View -->
+    <div id="app-view" class="hidden max-w-4xl mx-auto">
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl">
+        <div class="flex flex-col md:flex-row gap-6 items-center md:items-start">
+          <img id="app-icon" src="" alt="App Icon" class="w-32 h-32 rounded-3xl shadow-lg border border-slate-700 bg-slate-900 object-cover">
+          <div class="flex-1 text-center md:text-left">
+            <h1 id="app-title" class="text-2xl font-bold text-white"></h1>
+            <p id="app-dev" class="text-emerald-400 text-sm mt-1"></p>
+            <div class="flex flex-wrap gap-4 mt-4 justify-center md:justify-start text-xs text-slate-300">
+              <span class="bg-slate-900 px-3 py-1.5 rounded-lg"><i class="fa-solid fa-star text-amber-400 mr-1"></i> <span id="app-rating"></span></span>
+              <span class="bg-slate-900 px-3 py-1.5 rounded-lg"><i class="fa-solid fa-download text-blue-400 mr-1"></i> <span id="app-installs"></span></span>
+              <span class="bg-slate-900 px-3 py-1.5 rounded-lg"><i class="fa-solid fa-code-branch text-purple-400 mr-1"></i> <span id="app-version"></span></span>
+            </div>
+            
+            <button id="download-btn" onclick="startDownloadFlow()" class="mt-6 w-full md:w-auto bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-8 py-3 rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-download"></i> Fast Download APK
+            </button>
+          </div>
+        </div>
+
+        <!-- Download Countdown / Ad Box -->
+        <div id="download-box" class="hidden mt-6 bg-slate-900 border border-emerald-500/30 rounded-xl p-6 text-center">
+          <p id="countdown-text" class="text-lg font-medium text-slate-200">Your download link will generate in <span id="timer" class="text-emerald-400 font-bold text-xl">5</span> seconds...</p>
+          
+          <!-- Ad Placeholder -->
+          <div class="my-4 p-4 border border-dashed border-slate-700 rounded-lg text-slate-500 text-xs bg-slate-950">
+            [ Advertisement Space - Insert AdSense / Network Banner Here ]
+          </div>
+
+          <a id="final-download-link" href="#" target="_blank" class="hidden inline-block bg-emerald-500 text-slate-950 font-bold px-6 py-2.5 rounded-lg hover:bg-emerald-400 transition">
+            Click Here If Download Doesn't Start
+          </a>
+        </div>
+
+        <!-- Description -->
+        <div class="mt-8 border-t border-slate-700 pt-6">
+          <h3 class="text-lg font-bold mb-2">About this app</h3>
+          <p id="app-summary" class="text-slate-300 text-sm leading-relaxed"></p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    let currentApp = null;
+
+    // Load Default App on Startup
+    window.onload = () => loadApp('com.whatsapp');
+
+    // Handle Search Submit
+    document.getElementById('search-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const query = document.getElementById('search-input').value.trim();
+      if (!query) return;
+
+      showLoader();
+      try {
+        const res = await fetch(`/.netlify/functions/search?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        renderSearchResults(data);
+      } catch (err) {
+        alert('Failed to search.');
+      }
+    };
+
+    // Load Individual App Info
+    async function loadApp(packageId) {
+      showLoader();
+      try {
+        const res = await fetch(`/.netlify/functions/get-app?id=${packageId}`);
+        const data = await res.json();
+        
+        if (data.error) throw new Error(data.error);
+
+        currentApp = data;
+        document.getElementById('app-icon').src = data.icon;
+        document.getElementById('app-title').innerText = data.title;
+        document.getElementById('app-dev').innerText = data.developer;
+        document.getElementById('app-rating').innerText = data.scoreText || '4.2';
+        document.getElementById('app-installs').innerText = data.installs || '10,000+';
+        document.getElementById('app-version').innerText = data.version;
+        document.getElementById('app-summary').innerText = data.summary;
+
+        document.getElementById('loader').classList.add('hidden');
+        document.getElementById('search-results').classList.add('hidden');
+        document.getElementById('app-view').classList.remove('hidden');
+        document.getElementById('download-box').classList.add('hidden');
+      } catch (err) {
+        alert(err.message || 'Error loading app details.');
+        document.getElementById('loader').classList.add('hidden');
+      }
+    }
+
+    // Render Search Grid
+    function renderSearchResults(apps) {
+      const grid = document.getElementById('results-grid');
+      grid.innerHTML = '';
+
+      apps.forEach(app => {
+        const card = document.createElement('div');
+        card.className = "bg-slate-800 border border-slate-700 rounded-xl p-3 flex flex-col items-center text-center cursor-pointer hover:border-emerald-500 transition";
+        card.onclick = () => loadApp(app.id);
+        card.innerHTML = `
+          <img src="${app.icon}" class="w-16 h-16 rounded-2xl mb-2 object-cover">
+          <h4 class="text-xs font-bold text-white line-clamp-1">${app.title}</h4>
+          <p class="text-[10px] text-slate-400 line-clamp-1 mt-1">${app.developer}</p>
+        `;
+        grid.appendChild(card);
+      });
+
+      document.getElementById('loader').classList.add('hidden');
+      document.getElementById('app-view').classList.add('hidden');
+      document.getElementById('search-results').classList.remove('hidden');
+    }
+
+    // Countdown & Download Trigger Flow
+    function startDownloadFlow() {
+      const downloadBox = document.getElementById('download-box');
+      const timerSpan = document.getElementById('timer');
+      const countdownText = document.getElementById('countdown-text');
+      const finalLink = document.getElementById('final-download-link');
+
+      downloadBox.classList.remove('hidden');
+      finalLink.classList.add('hidden');
+      countdownText.classList.remove('hidden');
+
+      let timeLeft = 5;
+      timerSpan.innerText = timeLeft;
+
+      // Generates direct external store link or Play Store APK resolver URL
+      const downloadUrl = currentApp.playStoreUrl; 
+      finalLink.href = downloadUrl;
+
+      const interval = setInterval(() => {
+        timeLeft--;
+        timerSpan.innerText = timeLeft;
+        if (timeLeft <= 0) {
+          clearInterval(interval);
+          countdownText.classList.add('hidden');
+          finalLink.classList.remove('hidden');
+          // Trigger automated download/redirect
+          window.location.href = downloadUrl;
+        }
+      }, 1000);
+    }
+
+    function showLoader() {
+      document.getElementById('loader').classList.remove('hidden');
+      document.getElementById('app-view').classList.add('hidden');
+      document.getElementById('search-results').classList.add('hidden');
+    }
+  </script>
+</body>
+</html>
